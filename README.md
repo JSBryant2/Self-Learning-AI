@@ -97,6 +97,22 @@ Each run creates `runs/<run-id>/` containing:
 
 Use **Demonstration · separate world** to inspect scripted/manual controls independently. WASD does not override the training policy.
 
+## Watch saved policies without training
+
+Your laptop's existing `runs` folder is preserved by `git pull`; saved policies are not stored on GitHub. The app automatically lists `initial.zip` and `policy.zip` for each local run that has a valid `config.json`.
+
+1. Start the same Python server and Vite viewer.
+2. Select **Saved policies · no learning**, then **Open saved policies**, or scroll to the Saved policies panel.
+3. Pick **Latest saved policy** for your run, leave the seed at 10001 and duration at 20 seconds, and click **Watch policy**. The 3D view switches to that checkpoint.
+4. Use **Pause playback**, **Resume playback**, or **Restart same trial**. A trial freezes at its ending; it does not automatically start another attempt.
+5. To compare, choose **Initial policy** from the same run and keep the seed/duration unchanged. Completed results appear in a table with reward, time upright, forward displacement, motor work and ending reason.
+
+Playback uses the checkpoint's original task and deterministic action means, with no exploration noise or optimization. It creates its own environment and does not change checkpoint files, weights or training counters. The checkpoint is copied into memory at load time; refreshing the list and loading again picks up a newer save. The saved-experience count comes from the model, not the requested training budget. `initial.zip` can already contain learned weights when its run continued an earlier checkpoint.
+
+Playback comparisons remain in the current connection (last 20 completed trials); reloading the page clears them. Different browsers have independent playback sessions. Closing the browser releases the playback world. The training server and its run can continue independently. The network charts in the Learning lab remain labelled **training world 1**; they do not depict the playback world.
+
+Use **Refresh list** after new checkpoints are saved. No entries means the server cannot find compatible checkpoints under the repository's local `runs` directory. Existing archives must stay alongside their run's `config.json`; importing arbitrary external models is not supported.
+
 ## Body and training interface
 
 `physics/quadruped.urdf` describes a torso and four legs with hip roll, hip pitch, knee and fixed feet. Twelve joints have physical angle limits, target speed 4 rad/s, hip torque caps 12 N·m and knee caps 10 N·m. Foot contacts and normal forces are sensed. +Y is up and +Z is forward.
@@ -120,7 +136,7 @@ npm test
 npm run build
 ```
 
-On Windows run `.\.venv\Scripts\python.exe -m unittest discover -s tests -v` and `npm.cmd run build`. With training dependencies installed, 16 tests cover the Gymnasium contract, episodes, physics/joint limits, walking reward, real PPO weight updates, saved policy reload and two-process training. The three PPO tests are skipped when only base dependencies are installed. The build has a non-blocking Three.js bundle-size warning.
+On Windows run `.\.venv\Scripts\python.exe -m unittest discover -s tests -v` and `npm.cmd run build`. With training dependencies installed, 19 tests cover the Gymnasium contract, episodes, physics/joint limits, walking reward, real PPO weight updates, saved policy reload, two-process training, and deterministic/read-only playback. The PPO and saved-policy playback tests are skipped when only base dependencies are installed. The build has a non-blocking Three.js bundle-size warning.
 
 The original headless baseline runner is still available (not learning):
 
@@ -131,4 +147,4 @@ The original headless baseline runner is still available (not learning):
 
 Choose a new output filename each time; baseline logs are never overwritten.
 
-The server binds locally on 8765. Vite proxies `/physics` and `/training` WebSockets. This is a local development app; a production static build requires equivalent proxying. No external services, accounts or pretrained model downloads are needed at runtime.
+The server binds locally on 8765. Vite proxies `/physics`, `/training` and `/playback` WebSockets. This is a local development app; a production static build requires equivalent proxying. No external services, accounts or pretrained model downloads are needed at runtime.
