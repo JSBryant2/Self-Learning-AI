@@ -1,10 +1,11 @@
-"""Each viewer connection owns an independent simulation; localhost only."""
+"""Local demo worlds and a shared, independently running training session."""
 import asyncio
 import json
 import math
 from websockets.asyncio.server import serve
 from websockets.exceptions import ConnectionClosed
 from .simulation import Simulation
+from .training import TrainingManager
 
 
 def validate(message):
@@ -59,10 +60,40 @@ async def handle(socket):
         sim.close()
 
 
+async def handle_training(socket, manager):
+    async def receive():
+        async for raw in socket:
+            try:
+                manager.command(json.loads(raw))
+            except (ValueError, TypeError, OSError) as error:
+                await socket.send(json.dumps({'commandError': str(error)}))
+    reader = asyncio.create_task(receive())
+    try:
+        while not reader.done():
+            await socket.send(json.dumps(manager.poll(), allow_nan=False))
+            await asyncio.sleep(.1)
+    except ConnectionClosed:
+        pass
+    finally:
+        reader.cancel()
+        await asyncio.gather(reader, return_exceptions=True)
+
+
 async def main():
-    async with serve(handle, '127.0.0.1', 8765, max_size=4096):
-        print('Python physics listening on 127.0.0.1:8765', flush=True)
-        await asyncio.Future()
+    manager = TrainingManager()
+
+    async def route(socket):
+        if socket.request.path == '/training':
+            await handle_training(socket, manager)
+        else:
+            await handle(socket)
+
+    try:
+        async with serve(route, '127.0.0.1', 8765, max_size=4096):
+            print('Python physics and training listening on 127.0.0.1:8765', flush=True)
+            await asyncio.Future()
+    finally:
+        manager.close()
 
 
 if __name__ == '__main__':

@@ -12,13 +12,13 @@ class BalanceEnv(gym.Env):
         [f'body_up_{axis}' for axis in 'xyz'] +
         [f'body_velocity_{axis}' for axis in 'xyz'] +
         [f'body_angular_velocity_{axis}' for axis in 'xyz'] + ['height'] +
-        [f'joint_angle_{i}' for i in range(12)] +
-        [f'joint_velocity_{i}' for i in range(12)] +
+        [f'{leg}_{joint}_angle' for leg in Simulation.leg_names for joint in ('hip_roll', 'hip_pitch', 'knee')] +
+        [f'{leg}_{joint}_velocity' for leg in Simulation.leg_names for joint in ('hip_roll', 'hip_pitch', 'knee')] +
         [f'foot_contact_{leg}' for leg in Simulation.leg_names] +
         [f'foot_force_{leg}' for leg in Simulation.leg_names] +
-        [f'previous_action_{i}' for i in range(12)] + ['time_remaining'])
+        [f'{leg}_{joint}_previous_action' for leg in Simulation.leg_names for joint in ('hip_roll', 'hip_pitch', 'knee')] + ['time_remaining'])
 
-    def __init__(self, max_seconds=20.0, action_repeat=2, perturbation=.08, render_mode=None):
+    def __init__(self, max_seconds=20.0, action_repeat=2, perturbation=.08, render_mode=None, task="balance"):
         if not math.isfinite(max_seconds) or max_seconds <= 0:
             raise ValueError('max_seconds must be positive and finite')
         if not isinstance(action_repeat, int) or action_repeat < 1:
@@ -27,6 +27,9 @@ class BalanceEnv(gym.Env):
             raise ValueError('perturbation must be in [0, .2]')
         if render_mode not in (None, 'state'):
             raise ValueError('render_mode must be None or state')
+        if task not in ('balance', 'walk'):
+            raise ValueError('task must be balance or walk')
+        self.task = task
         self.render_mode = render_mode
         self.max_seconds, self.action_repeat, self.perturbation = max_seconds, action_repeat, perturbation
         self.action_space = gym.spaces.Box(-1, 1, (12,), dtype=np.float32)
@@ -80,7 +83,7 @@ class BalanceEnv(gym.Env):
             raise ValueError('Action must contain 12 finite numeric values')
         action = np.clip(raw, -1, 1).astype(np.float32)
         smoothness = float(np.mean((action-self.previous_action)**2))
-        components = dict(upright=0.0, height=0.0, effort=0.0, smoothness=0.0, fall=0.0)
+        components = dict(upright=0.0, height=0.0, effort=0.0, smoothness=0.0, fall=0.0, forward=0.0)
         reason = None
         for _ in range(self.action_repeat):
             obs = self.sim.step(actions=action.tolist())
@@ -90,6 +93,8 @@ class BalanceEnv(gym.Env):
             components['height'] += .25*max(0, 1-abs(obs['height']-.98)/.53)*dt
             components['effort'] -= .02*(power/48)*dt
             components['smoothness'] -= .02*smoothness*dt
+            if self.task == 'walk':
+                components['forward'] += .5*float(np.clip(obs['linearVelocity'][2], -2, 2))*max(0, obs['upright'])*dt
             self.motor_work += power*dt
             if obs['upright'] > .85 and obs['height'] > .65:
                 self.upright_seconds += dt
@@ -108,11 +113,17 @@ class BalanceEnv(gym.Env):
         info = {'reward_components': components, 'reason': reason or ('time_limit' if truncated else None)}
         if self.done:
             displacement = np.array(obs['position'])-self.start_position
-            info['episode'] = dict(reward=self.total_reward, steps=self.steps, seconds=self.sim.time,
+            info['episode'] = dict(r=self.total_reward, l=self.steps, t=self.sim.time,
+                                   reward=self.total_reward, steps=self.steps, seconds=self.sim.time,
                                    upright_seconds=self.upright_seconds, distance=float(np.linalg.norm(displacement[[0, 2]])),
                                    forward_distance=float(displacement[2]), motor_work_joules=self.motor_work,
                                    reason=info['reason'], world_seed=self.world_seed)
         return self._vector(obs), float(reward), terminated, truncated, info
+
+    def training_snapshot(self):
+        return dict(scene=self.sim.snapshot(), observation=self._vector(self.sim.observe()).tolist(),
+                    episode_reward=self.total_reward, episode_steps=self.steps,
+                    upright_seconds=self.upright_seconds)
 
     def render(self):
         return self.sim.snapshot() if self.render_mode == 'state' else None

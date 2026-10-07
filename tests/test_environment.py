@@ -68,3 +68,15 @@ class EnvironmentTests(unittest.TestCase):
         self.assertEqual(info['reason'], 'time_limit')
         self.assertGreater(info['episode']['upright_seconds'], 1.8)
         self.assertGreater(info['episode']['reward'], 1.5)
+
+    def test_walk_task_rewards_forward_motion_without_scripted_actions(self):
+        balance, walk = self.make(perturbation=0), self.make(perturbation=0, task='walk')
+        for env in (balance, walk):
+            env.reset(seed=1)
+            p.resetBaseVelocity(env.sim.torso, [0,0,1], [0,0,0], physicsClientId=env.sim.client)
+        _, balance_reward, _, _, balance_info = balance.step(np.zeros(12))
+        _, walk_reward, _, _, walk_info = walk.step(np.zeros(12))
+        self.assertEqual(balance_info['reward_components']['forward'], 0)
+        self.assertGreater(walk_info['reward_components']['forward'], 0)
+        self.assertGreater(walk_reward, balance_reward)
+        self.assertEqual(walk.sim.actions, [0]*12)
