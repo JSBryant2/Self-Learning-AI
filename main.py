@@ -8,6 +8,7 @@ from uuid import uuid4
 from agent import create_agent, choose_action
 from environment import create_environment, observe, apply_action
 from memory import load_experiences, save_experience
+from prediction import predict_outcome, prediction_statistics
 
 PROJECT_DIRECTORY = Path(__file__).resolve().parent
 MEMORY_PATH = PROJECT_DIRECTORY / "experiences.jsonl"
@@ -18,8 +19,13 @@ def take_step():
 
     observation_before = observe(world)
     action = choose_action(agent, observation_before)
+    # Predict from earlier experiences only. The action has already been chosen.
+    prediction = predict_outcome(observation_before, action, experiences)
     actual_result = apply_action(world, action)
     observation_after = observe(world)
+    prediction_correct = None
+    if prediction["outcome"] is not None:
+        prediction_correct = prediction["outcome"] == actual_result
     step += 1
 
     experience = {
@@ -27,15 +33,44 @@ def take_step():
         "step": step,
         "observation_before": observation_before,
         "action": action,
+        "prediction": prediction["outcome"],
+        "prediction_confidence": prediction["confidence"],
+        "prediction_matching_count": prediction["matching_count"],
+        "prediction_outcome_counts": prediction["outcome_counts"],
         "actual_result": actual_result,
         "observation_after": observation_after,
+        "prediction_correct": prediction_correct,
     }
     save_experience(MEMORY_PATH, experiences, experience)
     latest_experience = experience
     agent["current_observation"] = observation_after
 
-    print(f"Step {step:4} | {action:12} | {actual_result} | memories: {len(experiences)}", flush=True)
-    print("  Observation: " + json.dumps(observation_after), flush=True)
+    statistics = prediction_statistics(experiences)
+    accuracy_text = "—"
+    if statistics["accuracy"] is not None:
+        accuracy_text = f"{statistics['accuracy']:.1%}"
+    correct_text = "not assessed (UNKNOWN)"
+    if prediction_correct is not None:
+        correct_text = "yes" if prediction_correct else "no"
+    ahead = observation_before["ahead"]
+    ahead_text = ahead["type"]
+    if "state" in ahead:
+        ahead_text += " " + ahead["state"]
+    print(
+        f"\nSTEP {step}\n"
+        f"Observation before action: {ahead_text} ahead\n"
+        f"Action: {action}\n"
+        f"Prediction: {prediction['outcome'] or 'UNKNOWN'}\n"
+        f"Confidence: {prediction['confidence']:.1%}\n"
+        f"Matching experiences: {prediction['matching_count']}\n"
+        f"Outcome counts: {json.dumps(prediction['outcome_counts'])}\n"
+        f"Actual result: {actual_result}\n"
+        f"Prediction correct: {correct_text}\n"
+        f"Running prediction accuracy: {accuracy_text} "
+        f"({statistics['correct_predictions']}/{statistics['predictions_made']} known predictions)\n"
+        f"Stored experiences: {len(experiences)}",
+        flush=True,
+    )
 
 
 def reset_environment():
@@ -59,6 +94,8 @@ def display_state():
         "latest_result": latest_experience["actual_result"] if latest_experience else None,
         "step": step,
         "experience_count": len(experiences),
+        "latest_experience": latest_experience,
+        "prediction_statistics": prediction_statistics(experiences),
     }
 
 

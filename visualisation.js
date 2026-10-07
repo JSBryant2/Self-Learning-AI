@@ -104,6 +104,54 @@ function renderState(state) {
   document.getElementById("count").textContent = state.experience_count;
   document.getElementById("action").textContent = state.latest_action ? readableName(state.latest_action) : "No action yet";
   document.getElementById("result").textContent = state.latest_result || "Waiting for the first step";
+  renderPrediction(state);
+}
+
+function percentage(value) {
+  return value === null ? "—" : (value * 100).toFixed(1) + "%";
+}
+
+function renderPrediction(state) {
+  const experience = state.latest_experience;
+  document.getElementById("prediction").textContent = experience ? (experience.prediction ?? "UNKNOWN") : "—";
+  document.getElementById("confidence").textContent = experience ? percentage(experience.prediction_confidence) : "—";
+  document.getElementById("matching-count").textContent = experience ? experience.prediction_matching_count : 0;
+
+  let correctness = "—";
+  if (experience) {
+    correctness = experience.prediction_correct === null ? "Not assessed" : (experience.prediction_correct ? "Yes" : "No");
+  }
+  document.getElementById("prediction-correct").textContent = correctness;
+  let context = "No action yet";
+  if (experience) {
+    const ahead = experience.observation_before.ahead;
+    context = ahead.type + (ahead.state ? " " + ahead.state : "") + " ahead · " + readableName(experience.action);
+  }
+  document.getElementById("prediction-context").textContent = context;
+
+  // These counts come from Python's pre-action search, not the new experience.
+  const evidence = document.getElementById("prediction-evidence");
+  evidence.replaceChildren();
+  if (experience && experience.prediction_matching_count > 0) {
+    for (const [outcome, count] of Object.entries(experience.prediction_outcome_counts)) {
+      const item = document.createElement("li");
+      item.textContent = `${outcome}: ${count} / ${experience.prediction_matching_count}`;
+      evidence.append(item);
+    }
+  } else {
+    const item = document.createElement("li");
+    item.textContent = experience ? "No matching memories before this action." : "No prediction yet.";
+    evidence.append(item);
+  }
+
+  const statistics = state.prediction_statistics;
+  document.getElementById("accuracy").textContent = percentage(statistics.accuracy);
+  document.getElementById("recent-accuracy").textContent = percentage(statistics.recent_accuracy);
+  document.getElementById("attempts").textContent = statistics.attempts;
+  document.getElementById("predictions-made").textContent = statistics.predictions_made;
+  document.getElementById("correct-count").textContent = statistics.correct_predictions;
+  document.getElementById("unknown-count").textContent = statistics.unknown_attempts;
+  document.getElementById("accuracy-note").textContent = `UNKNOWN attempts are excluded. Recent window: ${statistics.recent_count}/100 known predictions. Statistics survive resets.`;
 }
 
 function renderLog() {
@@ -152,7 +200,9 @@ async function performStep() {
   try {
     const state = await requestState("/step", "POST");
     renderState(state);
-    logEntries.unshift(`${state.step} · ${readableName(state.latest_action)} · ${state.latest_result}`);
+    const experience = state.latest_experience;
+    const correctness = experience.prediction_correct === null ? "not assessed" : (experience.prediction_correct ? "correct" : "incorrect");
+    logEntries.unshift(`${state.step} · ${readableName(state.latest_action)} · predicted: ${experience.prediction ?? "UNKNOWN"} (${percentage(experience.prediction_confidence)}) · actual: ${state.latest_result} · ${correctness}`);
     logEntries = logEntries.slice(0, 6);
     renderLog();
   } catch (error) {

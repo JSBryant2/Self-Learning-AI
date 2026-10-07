@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Grid World · Version 1</title>
+  <title>Grid World · Version 2</title>
   <link rel="stylesheet" href="/style.css">
   <script src="/visualisation.js" defer></script>
 </head>
 <body>
   <main>
     <header>
-      <div><p class="eyebrow">A single agent · Version 1</p><h1>A small world to explore.</h1></div>
+      <div><p class="eyebrow">A single agent · Version 2</p><h1>A small world to explore.</h1></div>
       <span id="status" class="status" role="status">Connecting</span>
     </header>
     <div class="layout">
@@ -31,10 +31,24 @@
       </section>
       <aside class="panel">
         <section class="card">
-          <p class="eyebrow">Observe → choose → act → observe → remember</p>
+          <p class="eyebrow">Observe → choose → predict → act → observe → compare → remember</p>
           <div class="metrics"><div><span>Current step</span><strong id="step">0</strong></div><div><span>Stored experiences</span><strong id="count">0</strong></div></div>
           <div class="detail"><span>Latest action</span><strong id="action">No action yet</strong></div>
           <div class="detail"><span>Actual result</span><strong id="result">Waiting for the first step</strong></div>
+        </section>
+        <section class="card">
+          <div class="section-heading"><h2>Latest prediction</h2><span>Before the latest action</span></div>
+          <div class="detail"><span>Matching situation</span><strong id="prediction-context">No action yet</strong></div>
+          <div class="detail"><span>Predicted result</span><strong id="prediction">—</strong></div>
+          <div class="prediction-metrics"><div><span>Confidence</span><strong id="confidence">—</strong></div><div><span>Matching memories</span><strong id="matching-count">0</strong></div><div><span>Prediction correct?</span><strong id="prediction-correct">—</strong></div></div>
+          <p class="hint">Confidence is consistency among matching memories. One match can give 100%.</p>
+          <ul id="prediction-evidence" class="log"><li>No prediction yet.</li></ul>
+        </section>
+        <section class="card">
+          <h2>Prediction accuracy</h2>
+          <div class="prediction-metrics"><div><span>Overall</span><strong id="accuracy">—</strong></div><div><span>Recent · last 100 known</span><strong id="recent-accuracy">—</strong></div></div>
+          <div class="prediction-metrics"><div><span>Attempts</span><strong id="attempts">0</strong></div><div><span>Known predictions</span><strong id="predictions-made">0</strong></div><div><span>Correct predictions</span><strong id="correct-count">0</strong></div><div><span>Unknown attempts</span><strong id="unknown-count">0</strong></div></div>
+          <p id="accuracy-note" class="hint">UNKNOWN attempts are excluded from accuracy. Statistics survive resets.</p>
         </section>
         <section class="card">
           <div class="section-heading"><h2>Agent observation</h2><span>Local · 3 × 3</span></div>
@@ -49,7 +63,7 @@
       </aside>
     </div>
     <p id="error" class="error" role="alert" hidden></p>
-    <footer>Random exploration · experience memory · no learning yet</footer>
+    <footer>Random exploration · predictions from memory · actions remain random</footer>
   </main>
 </body>
 </html>
