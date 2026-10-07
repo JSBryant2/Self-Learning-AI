@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Grid World · Version 1</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/visualisation.js" defer></script>
+</head>
+<body>
+  <main>
+    <header>
+      <div><p class="eyebrow">A single agent · Version 1</p><h1>A small world to explore.</h1></div>
+      <span id="status" class="status" role="status">Connecting</span>
+    </header>
+    <div class="layout">
+      <section class="card world-card" aria-labelledby="world-title">
+        <div class="section-heading"><h2 id="world-title">Grid world</h2><span>Your view · complete map</span></div>
+        <div id="world" class="world" aria-label="10 by 10 grid world">
+          <div id="grid" class="grid"></div>
+          <div id="agent" class="agent" role="img" aria-label="Agent"><span id="agent-arrow">▲</span></div>
+        </div>
+        <div class="legend"><span><i class="floor-key"></i>Floor</span><span><i class="wall-key"></i>Wall</span><span><i class="switch-key"></i>Switch off</span><span><i class="on-key"></i>Switch on</span></div>
+        <div class="controls">
+          <button id="start" class="primary" disabled>Start</button>
+          <button id="single-step" disabled>Single step</button>
+          <button id="reset" disabled>Reset environment</button>
+        </div>
+        <label class="speed" for="speed">Simulation speed <input id="speed" type="range" min="1" max="8" value="2"><output id="speed-label">2 steps/s</output></label>
+        <p class="hint">Reset restores the world. Saved experiences are retained.</p>
+      </section>
+      <aside class="panel">
+        <section class="card">
+          <p class="eyebrow">Observe → choose → act → observe → remember</p>
+          <div class="metrics"><div><span>Current step</span><strong id="step">0</strong></div><div><span>Stored experiences</span><strong id="count">0</strong></div></div>
+          <div class="detail"><span>Latest action</span><strong id="action">No action yet</strong></div>
+          <div class="detail"><span>Actual result</span><strong id="result">Waiting for the first step</strong></div>
+        </section>
+        <section class="card">
+          <div class="section-heading"><h2>Agent observation</h2><span>Local · 3 × 3</span></div>
+          <p class="hint">Ahead is always at the top. This view rotates with the agent.</p>
+          <div id="observation" class="observation" aria-label="Agent's relative local observation"></div>
+        </section>
+        <section class="card">
+          <h2>Action log</h2>
+          <p class="hint">Recent actions in this browser. Full experiences are saved by Python.</p>
+          <ol id="log" class="log"><li>No actions yet.</li></ol>
+        </section>
+      </aside>
+    </div>
+    <p id="error" class="error" role="alert" hidden></p>
+    <footer>Random exploration · experience memory · no learning yet</footer>
+  </main>
+</body>
+</html>
