@@ -116,6 +116,8 @@ async def handle_playback(socket):
         if not reader.done():
             try:
                 await asyncio.wait_for(asyncio.shield(reader), timeout=.05)
+            except ConnectionClosed:
+                pass
             except asyncio.TimeoutError:
                 async with lock:
                     reader.cancel()

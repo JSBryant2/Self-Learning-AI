@@ -93,7 +93,7 @@ Each run creates `runs/<run-id>/` containing:
 - `episodes.jsonl`: completed episode measurements.
 - `evaluation.jsonl`: policy evaluations after initialization.
 
-**Continue saved policy** resumes the latest checkpoint from the same task. The server rediscovers the latest saved checkpoint after restart; if its task differs, select that task or start fresh. Continuation starts fresh environments and episode history, keeping network parameters and optimizer state; it is not an exact replay of interrupted simulation/RNG state. Checkpoints and logs are ignored by Git. Closing the browser does not stop a server-owned run. Stop/save before closing the Python server to preserve the latest work.
+**Initialisation → Continue same task** resumes a selected checkpoint (or the latest checkpoint when no source is selected) from the same task. The server rediscovers the latest saved checkpoint after restart; if its task differs, select that task or start fresh. Continuation starts fresh environments and episode history, keeping network parameters and optimizer state; it is not an exact replay of interrupted simulation/RNG state. Checkpoints and logs are ignored by Git. Closing the browser does not stop a server-owned run. Stop/save before closing the Python server to preserve the latest work.
 
 Use **Demonstration · separate world** to inspect scripted/manual controls independently. WASD does not override the training policy.
 
@@ -127,7 +127,7 @@ Balance reward per second:
 
 `0.75 × uprightness + 0.25 × height_quality − 0.02 × motor_power/48 − 0.02 × mean(action_change²)`
 
-Uprightness is floored at zero. Height quality peaks at 0.98 m, decreasing to zero at a deviation of 0.53 m. A fall subtracts 1. The optional walk task adds `0.5 × clipped_world_forward_velocity × uprightness` per second (velocity clipped to ±2 m/s). Body posture, reward definitions and motor servos are human-designed priors; the network starts without learned knowledge.
+Uprightness is floored at zero. Height quality peaks at 0.98 m, decreasing to zero at a deviation of 0.53 m. A fall subtracts 1. Legacy walking checkpoints use an extra `0.5 × clipped_world_forward_velocity × uprightness` per second (velocity clipped to ±2 m/s). New walking runs use the curriculum described below. Body posture, reward definitions and motor servos are human-designed priors; a fresh network starts without learned knowledge.
 
 ## Validate and baseline experiments
 
@@ -136,7 +136,7 @@ npm test
 npm run build
 ```
 
-On Windows run `.\.venv\Scripts\python.exe -m unittest discover -s tests -v` and `npm.cmd run build`. With training dependencies installed, 19 tests cover the Gymnasium contract, episodes, physics/joint limits, walking reward, real PPO weight updates, saved policy reload, two-process training, and deterministic/read-only playback. The PPO and saved-policy playback tests are skipped when only base dependencies are installed. The build has a non-blocking Three.js bundle-size warning.
+On Windows run `.\.venv\Scripts\python.exe -m unittest discover -s tests -v` and `npm.cmd run build`. With training dependencies installed, 24 tests cover the Gymnasium contract, episodes, physics/joint limits, walking reward, real PPO weight updates, saved policy reload, two-process training, and deterministic/read-only playback. The PPO and saved-policy playback tests are skipped when only base dependencies are installed. The build has a non-blocking Three.js bundle-size warning.
 
 The original headless baseline runner is still available (not learning):
 
@@ -148,3 +148,43 @@ The original headless baseline runner is still available (not learning):
 Choose a new output filename each time; baseline logs are never overwritten.
 
 The server binds locally on 8765. Vite proxies `/physics`, `/training` and `/playback` WebSockets. This is a local development app; a production static build requires equivalent proxying. No external services, accounts or pretrained model downloads are needed at runtime.
+
+## Transfer standing into a walking curriculum
+
+New walking runs use an updated task (version 2). Your existing balance checkpoints and legacy walking checkpoints remain loadable and unchanged.
+
+1. Pull this update and restart both servers. No new dependencies are needed.
+2. In the Learning lab select **Initialisation → Transfer to walking**. This selects the walking task and suggests **150,000 additional experience steps** in fast mode.
+3. Choose your successful **balance checkpoint** in **Source checkpoint**. If a new save is missing, press **Refresh list** in Saved policies to refresh both selectors.
+4. Leave **Starting stage = first steps**, **Auto progression enabled**, and **Worlds = 1**, then start learning. You can watch sampled frames in fast mode or switch to real time.
+5. Use **Continue same task** with a selected walking checkpoint to continue it. Its saved stage is inherited. Fresh starts or transfers from balance use the chosen starting stage.
+
+Transfer copies the actor, including exploration parameters, to a new run. The original archive is never overwritten. A new reward objective gets a fresh value output head and optimizer; this is fine-tuning, not an exact optimizer continuation across tasks. Existing 55-input checkpoints gain four zero-weight input columns, so their initial action means are preserved. These channels supply target speed and the requested world-forward direction expressed in body coordinates. Balance and legacy playback retain the original 55-value interface; new walking policies use **59 values**. Their actor graph updates its input count accordingly.
+
+### Targets and promotion
+
+The stages request **0.10, 0.20, 0.35 and 0.50 m/s** along world +Z. Later stages also increase initial pose variation. Early walking worlds have a clear flat corridor; objects are moved to the sides. This is not yet a terrain or turning curriculum.
+
+No prescribed gait, leg order, or scripted W-key movement is supplied. The policy controls all 12 joints independently. Walking rewards add speed tracking and progress to the balance reward, penalize motor work, sideways drift, body dragging and foot slipping, and give a small bonus for completed foot swing/contact cycles. Progress credit is gated by upright posture, body height, foot support and low contact-foot slip speed; belly dragging or airborne translation does not receive walking progress credit.
+
+A foot cycle requires a previously grounded foot to leave contact for at least 0.05 seconds, reach centre height of at least 0.09 m, and return to contact. It is a useful measurement, not a proof of a natural walking gait.
+
+A stage promotes only after **three consecutive evaluations** where **every trial**:
+
+- remains upright at least 90% of the time and finishes without falling/leaving bounds;
+- averages at least 60% of the requested forward speed;
+- keeps mean contact-foot slip speed below `min(0.12 m/s, half the target speed)`;
+- has non-foot body contact for no more than 2% of the attempt;
+- completes at least two foot cycles involving at least two legs.
+
+These evaluations last 10 seconds on seeds 10001/10002. They guide promotion and are therefore validation trials, not a final independent test. Targets change at the **next episode reset**, never halfway through an attempt. Disable Auto progression to work on a fixed stage. Natural run completion also produces a separate 10-second test on seeds **20001/20002/20003**, not used for promotions, saved as `generalization.json` and shown in the dashboard. Stopped runs skip this final test to save time.
+
+The interface shows target speed, measured forward speed, foot cycles, slip speed and falls. Evaluation reward curves are filtered to one stage, since reward scores across different objectives should not be compared directly.
+
+### Preserve and compare useful walking policies
+
+In addition to initial/latest policies, runs save **Best stage N policy** (best evaluation score observed, including the initial policy) and **Completed stage N policy** when promoted. Best score is forward speed minus slip speed, half fall rate and half body-contact fraction. A "best" checkpoint need not have passed a stage or learned to walk. Checkpoints are published as complete archives, avoiding partial files during playback.
+
+Saved-policy playback understands both old and new observation formats. For fair comparisons between initial/latest checkpoints from a walking run, select the **same explicit Test stage**, seed and duration; their original checkpoint stages may differ. The table now reports speed/target, slipping and foot cycles alongside balance, reward and effort. Playback never trains or modifies the selected policy.
+
+Long training and reward tuning may still be necessary. The implementation tests transfer, updates, curriculum rules and playback; it does not establish that a short run learns successful walking. Keep your standing checkpoint as the reference and judge movement through deterministic playback and the measured evaluations.

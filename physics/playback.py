@@ -18,11 +18,18 @@ def saved_policies(root=Path('runs')):
             config = json.loads((directory/'config.json').read_text())
             if config['task'] not in ('balance', 'walk'):
                 continue
-            for filename, label in [('initial.zip', 'Initial policy'), ('policy.zip', 'Latest saved policy')]:
+            choices = [('initial.zip', 'Initial policy'), ('policy.zip', 'Latest saved policy')]
+            for stage in range(4):
+                choices.extend([(f'best-stage-{stage}.zip', f'Best stage {stage+1} policy'),
+                                (f'stage-{stage}.zip', f'Completed stage {stage+1} policy')])
+            for filename, label in choices:
                 path = directory/filename
                 if path.is_file() and not path.is_symlink():
                     entries.append(dict(id=f'{directory.name}/{filename}', run_id=directory.name,
                                         label=label, task=config['task'], training_steps=config.get('steps'),
+                                        walking_stage=(int(filename.split('-')[-1].split('.')[0]) if 'stage-' in filename else
+                                                       config.get('initial_stage',config.get('stage',0)) if filename=='initial.zip' else
+                                                       config.get('checkpoint_stage',config.get('stage',0))) if config.get('walk_version') == 2 else None,
                                         modified=path.stat().st_mtime))
         except (OSError, ValueError, KeyError, TypeError):
             continue
@@ -41,7 +48,13 @@ def validate_load(message, root=Path('runs')):
         raise ValueError('Seed must be an integer from 0 to 999999')
     if isinstance(seconds, bool) or not isinstance(seconds, (int, float)) or not math.isfinite(seconds) or not 1 <= seconds <= 120:
         raise ValueError('Episode duration must be from 1 to 120 seconds')
-    return entries[identifier], seed, float(seconds)
+    entry = entries[identifier].copy()
+    stage = message.get('stage', 'saved')
+    if stage != 'saved':
+        if isinstance(stage,bool) or not isinstance(stage,int) or not 0 <= stage <= 3 or entry['walking_stage'] is None:
+            raise ValueError('Stage override requires a curriculum walking policy and stage 0 to 3')
+        entry['walking_stage'] = stage
+    return entry, seed, float(seconds)
 
 
 class PlaybackSession:
@@ -58,7 +71,7 @@ class PlaybackSession:
         from .learner import PPO, torch
         torch.set_num_threads(1)
         model = PPO.load(self.root/entry['id'], device='cpu')
-        env = BalanceEnv(task=entry['task'], max_seconds=seconds)
+        env = BalanceEnv(task=entry['task'], max_seconds=seconds, walking_stage=entry['walking_stage'])
         try:
             observation, _ = env.reset(seed=seed)
         except Exception:

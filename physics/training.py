@@ -18,7 +18,19 @@ def validate_start(message):
     task, speed, resume = message.get('task', 'balance'), message.get('speed', 'realtime'), message.get('resume', False)
     if task not in ('balance', 'walk') or speed not in ('realtime', 'fast') or not isinstance(resume, bool):
         raise ValueError('Invalid task, speed or resume option')
-    return dict(worlds=worlds, steps=steps, seed=seed, task=task, speed=speed, resume=resume)
+    initialization = message.get('initialization', 'resume' if resume else 'fresh')
+    source_policy = message.get('source_policy', '')
+    stage, curriculum = message.get('stage', 0), message.get('curriculum', True)
+    if initialization not in ('fresh', 'resume', 'transfer') or not isinstance(source_policy, str):
+        raise ValueError('Invalid initialization or source checkpoint')
+    if isinstance(stage, bool) or not isinstance(stage, int) or not 0 <= stage <= 3 or not isinstance(curriculum,bool):
+        raise ValueError('Invalid curriculum stage or enable flag')
+    if initialization == 'transfer' and (task != 'walk' or not source_policy):
+        raise ValueError('Transfer requires walking and a selected source checkpoint')
+    return dict(worlds=worlds, steps=steps, seed=seed, task=task, speed=speed,
+                resume=initialization == 'resume', initialization=initialization, source_policy=source_policy,
+                stage=stage, initial_stage=stage, curriculum=curriculum,
+                walk_version=2 if task == 'walk' else 1)
 
 
 class TrainingManager:
@@ -68,9 +80,28 @@ class TrainingManager:
                 raise ValueError('A shared training run is already active')
             if importlib.util.find_spec('stable_baselines3') is None:
                 raise ValueError('Install requirements-training.txt before starting training')
-            checkpoint = self.last_checkpoint if config['resume'] else None
-            if config['resume'] and (not checkpoint or not Path(checkpoint).is_file() or self.last_task != config['task']):
-                raise ValueError('Resume requires a saved checkpoint from the same task')
+            checkpoint = None
+            if config['initialization'] in ('resume', 'transfer'):
+                from .playback import saved_policies
+                entries = {entry['id']:entry for entry in saved_policies(self.root)}
+                if config['source_policy']:
+                    entry = entries.get(config['source_policy'])
+                    if entry is None:
+                        raise ValueError('Select an available source checkpoint')
+                    checkpoint, source_task = str(self.root/entry['id']), entry['task']
+                    if source_task == 'walk' and entry['walking_stage'] is not None:
+                        config['stage'] = config['initial_stage'] = entry['walking_stage']
+                else:
+                    checkpoint, source_task = self.last_checkpoint, self.last_task
+                    entry = next((entry for entry in entries.values()
+                                  if checkpoint and (self.root/entry['id']).resolve() == Path(checkpoint).resolve()), None)
+                    if entry is not None and entry['walking_stage'] is not None:
+                        config['stage'] = config['initial_stage'] = entry['walking_stage']
+                if not checkpoint or not Path(checkpoint).is_file():
+                    raise ValueError('No saved checkpoint available')
+                if config['initialization'] == 'resume' and source_task != config['task']:
+                    raise ValueError('Use Transfer to walking to change a balance checkpoint into walking')
+                config['source_task'] = source_task
             if self.process is not None:
                 self.process.join(timeout=1)
                 self.output.close()

@@ -111,7 +111,13 @@ class Simulation:
         contacts = p.getContactPoints(bodyA=self.torso, physicsClientId=self.client)
         foot_forces = [sum(c[9] for c in contacts if c[3] == index and c[2] != self.torso)
                        for index in self.foot_ids]
-        return dict(orientation=list(rotation), linearVelocity=list(velocity), angularVelocity=list(angular_velocity),
+        foot_states = [p.getLinkState(self.torso, index, computeLinkVelocity=True,
+                                      physicsClientId=self.client) for index in self.foot_ids]
+        non_foot_contact = any(c[3] not in self.foot_ids and c[2] != self.torso and c[9] > .01
+                               for c in contacts)
+        return dict(footPositions=[list(state[0]) for state in foot_states],
+                    footVelocities=[list(state[6]) for state in foot_states], nonFootContact=non_foot_contact,
+                    orientation=list(rotation), linearVelocity=list(velocity), angularVelocity=list(angular_velocity),
                     footContacts=[force > .01 for force in foot_forces], footForces=foot_forces,
                     jointTorques=[j[3] for j in joints], height=position[1], upright=p.getMatrixFromQuaternion(rotation)[4],
                     speed=math.sqrt(sum(v*v for v in velocity)),
