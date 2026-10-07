@@ -2,16 +2,24 @@
 
 
 def predict_outcome(observation, action, experiences):
-    # Ignore the other eight cells. Switch state is part of the ahead description.
+    # Switch state is part of ahead. Block pushes also depend on the destination.
     ahead = observation["ahead"]
+    needs_far_ahead = action == "interact" and ahead["type"] == "block"
     outcome_counts = {}
     matching_count = 0
 
     for experience in experiences:
         if experience["action"] != action:
             continue
-        if experience["observation_before"]["ahead"] != ahead:
+        previous_observation = experience["observation_before"]
+        if previous_observation["ahead"] != ahead:
             continue
+        if needs_far_ahead:
+            # Older memories without this information cannot explain a block push.
+            if "far_ahead" not in observation or "far_ahead" not in previous_observation:
+                continue
+            if previous_observation["far_ahead"] != observation["far_ahead"]:
+                continue
 
         outcome = experience["actual_result"]
         if outcome not in outcome_counts:

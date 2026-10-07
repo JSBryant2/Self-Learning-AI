@@ -20,7 +20,7 @@
           <div id="grid" class="grid"></div>
           <div id="agent" class="agent" role="img" aria-label="Agent"><span id="agent-arrow">▲</span></div>
         </div>
-        <div class="legend"><span><i class="floor-key"></i>Floor</span><span><i class="wall-key"></i>Wall</span><span><i class="switch-key"></i>Switch off</span><span><i class="on-key"></i>Switch on</span></div>
+        <div class="legend"><span><i class="floor-key"></i>Floor</span><span><i class="wall-key"></i>Wall</span><span><i class="block-key"></i>Block</span><span><i class="switch-key"></i>Switch off</span><span><i class="on-key"></i>Switch on</span></div>
         <div class="controls">
           <button id="start" class="primary" disabled>Start</button>
           <button id="single-step" disabled>Single step</button>
@@ -51,8 +51,8 @@
           <p id="accuracy-note" class="hint">UNKNOWN attempts are excluded from accuracy. Statistics survive resets.</p>
         </section>
         <section class="card">
-          <div class="section-heading"><h2>Agent observation</h2><span>Local · 3 × 3</span></div>
-          <p class="hint">Ahead is always at the top. This view rotates with the agent.</p>
+          <div class="section-heading"><h2>Agent observation</h2><span>Forward + periphery</span></div>
+          <p class="hint">Ahead is at the top. Far ahead is two cells away; a wall ahead hides it. Blocks and switches allow sensing beyond. Rear cells are not observed.</p>
           <div id="observation" class="observation" aria-label="Agent's relative local observation"></div>
         </section>
         <section class="card">

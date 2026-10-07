@@ -56,9 +56,16 @@ def take_step():
     ahead_text = ahead["type"]
     if "state" in ahead:
         ahead_text += " " + ahead["state"]
+    observation_text = ahead_text + " ahead"
+    if action == "interact" and ahead["type"] == "block":
+        far_ahead = observation_before["far_ahead"]
+        far_text = far_ahead["type"]
+        if "state" in far_ahead:
+            far_text += " " + far_ahead["state"]
+        observation_text += "; " + far_text + " far ahead"
     print(
         f"\nSTEP {step}\n"
-        f"Observation before action: {ahead_text} ahead\n"
+        f"Observation before action: {observation_text}\n"
         f"Action: {action}\n"
         f"Prediction: {prediction['outcome'] or 'UNKNOWN'}\n"
         f"Confidence: {prediction['confidence']:.1%}\n"

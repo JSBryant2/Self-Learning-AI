@@ -31,7 +31,9 @@ def create_environment():
     return {
         "grid": grid,
         "objects": [
-            {"x": 3, "y": 2, "type": "switch", "state": "off"},
+            # Immediately ahead of the starting agent, with room for a first push.
+            {"x": 3, "y": 2, "type": "block"},
+            {"x": 2, "y": 3, "type": "switch", "state": "off"},
             {"x": 7, "y": 4, "type": "switch", "state": "off"},
             {"x": 2, "y": 7, "type": "switch", "state": "on"},
         ],
@@ -49,12 +51,15 @@ def cell_at(world, x, y):
         return {"type": "wall"}
     for obj in world["objects"]:
         if obj["x"] == x and obj["y"] == y:
-            return {"type": obj["type"], "state": obj["state"]}
+            description = {"type": obj["type"]}
+            if "state" in obj:
+                description["state"] = obj["state"]
+            return description
     return {"type": "floor"}
 
 
 def observe(world):
-    """Nine named cells, relative to facing. No coordinates leave this function."""
+    """Five nearby cells plus far ahead. No coordinates leave this function."""
     direction_index = DIRECTIONS.index(world["agent_direction"])
     forward_x, forward_y = FORWARD_OFFSETS[direction_index]
     right_x, right_y = FORWARD_OFFSETS[(direction_index + 1) % 4]
@@ -63,14 +68,21 @@ def observe(world):
     # Each entry is (name, distance forward, distance right).
     relative_cells = [
         ("ahead_left", 1, -1), ("ahead", 1, 0), ("ahead_right", 1, 1),
-        ("left", 0, -1), ("here", 0, 0), ("right", 0, 1),
-        ("behind_left", -1, -1), ("behind", -1, 0), ("behind_right", -1, 1),
+        ("left", 0, -1), ("right", 0, 1),
     ]
     observation = {}
     for name, forward_distance, right_distance in relative_cells:
         x = position["x"] + forward_distance * forward_x + right_distance * right_x
         y = position["y"] + forward_distance * forward_y + right_distance * right_y
         observation[name] = cell_at(world, x, y)
+
+    # Only the far-ahead ray is occluded. Blocks and switches allow sensing beyond.
+    if observation["ahead"]["type"] == "wall":
+        observation["far_ahead"] = {"type": "unseen"}
+    else:
+        far_x = position["x"] + 2 * forward_x
+        far_y = position["y"] + 2 * forward_y
+        observation["far_ahead"] = cell_at(world, far_x, far_y)
     return observation
 
 
@@ -97,12 +109,24 @@ def apply_action(world, action):
 
     if action == "interact":
         for obj in world["objects"]:
-            if obj["x"] == next_x and obj["y"] == next_y and obj["type"] == "switch":
+            if obj["x"] != next_x or obj["y"] != next_y:
+                continue
+            if obj["type"] == "switch":
                 if obj["state"] == "off":
                     obj["state"] = "on"
                 else:
                     obj["state"] = "off"
                 return "Switch changed to " + obj["state"]
+            if obj["type"] == "block":
+                destination_x = next_x + forward_x
+                destination_y = next_y + forward_y
+                destination = cell_at(world, destination_x, destination_y)
+                if destination["type"] != "floor":
+                    return "Block push blocked by " + destination["type"]
+                obj["x"] = destination_x
+                obj["y"] = destination_y
+                # Pushing moves only the block; the agent stays in place.
+                return "Block pushed forward"
         return "Nothing to interact with"
 
     raise ValueError("Unknown action: " + action)

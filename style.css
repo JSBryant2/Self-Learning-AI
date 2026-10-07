@@ -19,6 +19,7 @@ h2 { margin: 0; font-size: 17px; font-weight: 650; }
 .switch::after { content: ''; width: 36%; height: 36%; border-radius: 50%; background: #e5eadf; }
 .switch.on { background: #e6b952; border-color: #ba8e2e; box-shadow: 0 0 12px #e6b95266; }
 .switch.on::after { background: #fff7c7; }
+.cell .block { width: 64%; height: 64%; border-radius: 5px; background: #bd8655; border: 2px solid #90623c; box-shadow: inset 0 0 0 3px #dbb48b; }
 .agent { position: absolute; top: 0; left: 0; display: grid; place-items: center; transition: transform 100ms ease; pointer-events: none; }
 .agent span { display: grid; place-items: center; width: 70%; height: 70%; border-radius: 50%; background: #246a60; color: #fff; font-size: clamp(13px, 2.4vw, 24px); box-shadow: 0 3px 7px #173e4044; transition: transform 100ms ease; }
 .legend { display: flex; flex-wrap: wrap; gap: 15px; margin: 19px 0 25px; font-size: 11px; color: #63766c; }
@@ -26,6 +27,7 @@ h2 { margin: 0; font-size: 17px; font-weight: 650; }
 .legend i { width: 11px; height: 11px; border-radius: 3px; }
 .floor-key { background: #ebf0e4; border: 1px solid #dae3d1; }
 .wall-key { background: #63756c; }
+.block-key { background: #bd8655; }
 .switch-key { background: #aab5a5; }
 .on-key { background: #e6b952; }
 .controls { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -48,9 +50,12 @@ button:focus-visible, input:focus-visible { outline: 3px solid #e6b952; outline-
 .prediction-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 20px; }
 .prediction-metrics span { display: block; font-size: 11px; color: #6c7c74; margin-bottom: 7px; }
 .prediction-metrics strong { font-size: 18px; font-weight: 550; font-variant-numeric: tabular-nums; }
-.observation { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-top: 17px; }
+.observation { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-areas: ". far_ahead ." "ahead_left ahead ahead_right" "left self right"; gap: 7px; margin-top: 17px; }
 .observation-cell { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 7px; min-height: 76px; padding: 8px 2px; border-radius: 8px; background: #ebf0e4; border: 1px solid #dce5d5; text-align: center; }
 .observation-cell.wall { background: #63756c; color: white; border-color: #63756c; }
+.observation-cell.block { background: #f0ddc8; color: #70492c; border-color: #d4ae85; }
+.observation-cell.unseen { background: #e7e9e6; color: #6c7c74; border-style: dashed; }
+.observation-cell.self { background: #246a60; color: white; font-size: 12px; font-weight: 550; }
 .observation-cell.switch { width: auto; height: auto; background: #e0e5d9; }
 .observation-cell.switch::after { content: none; }
 .observation-cell.switch.on { background: #fff0bf; color: #705218; }

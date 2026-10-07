@@ -14,9 +14,9 @@ let arrowAngle = 0; // Presentation angle only; never sent to Python.
 let logEntries = [];
 
 const observationNames = [
+  "far_ahead",
   "ahead_left", "ahead", "ahead_right",
-  "left", "here", "right",
-  "behind_left", "behind", "behind_right"
+  "left", "right"
 ];
 
 function readableName(name) {
@@ -48,9 +48,11 @@ function renderWorld(world) {
       for (const object of world.objects) {
         if (object.x === x && object.y === y) {
           const marker = document.createElement("span");
-          marker.className = "switch " + object.state;
+          marker.className = object.type;
+          if (object.state) marker.classList.add(object.state);
           cell.append(marker);
-          description = object.type + " " + object.state;
+          description = object.type;
+          if (object.state) description += " " + object.state;
         }
       }
       cell.title = description;
@@ -86,6 +88,7 @@ function renderObservation(observation) {
     const description = observation[name];
     const cell = document.createElement("div");
     cell.className = "observation-cell " + description.type;
+    cell.style.gridArea = name;
     if (description.state) cell.classList.add(description.state);
     const label = document.createElement("small");
     label.textContent = readableName(name);
@@ -95,6 +98,12 @@ function renderObservation(observation) {
     cell.append(label, content);
     container.append(cell);
   }
+  // A fixed orientation reference for the viewer, not an extra observed cell.
+  const self = document.createElement("div");
+  self.className = "observation-cell self";
+  self.style.gridArea = "self";
+  self.textContent = "▲ Agent";
+  container.append(self);
 }
 
 function renderState(state) {
@@ -126,6 +135,11 @@ function renderPrediction(state) {
   if (experience) {
     const ahead = experience.observation_before.ahead;
     context = ahead.type + (ahead.state ? " " + ahead.state : "") + " ahead · " + readableName(experience.action);
+    if (experience.action === "interact" && ahead.type === "block") {
+      const far = experience.observation_before.far_ahead;
+      const farText = far ? far.type + (far.state ? " " + far.state : "") : "not recorded";
+      context += " · " + farText + " far ahead";
+    }
   }
   document.getElementById("prediction-context").textContent = context;
 
