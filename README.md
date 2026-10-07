@@ -76,3 +76,42 @@ npm run build
 On Windows run `.\.venv\Scripts\python.exe -m unittest discover -s tests -v` instead of `npm test`.
 
 Tests cover seeded resets, independent simulations, contact/gravity, 12-joint stance with four-foot support, physical joint limits and motor torque caps, direct action commands, a 10-second scripted mobility baseline and protocol validation. This checks the body can support movement; it does not establish learned walking or general terrain ability. The build may report a non-blocking Three.js bundle-size warning.
+
+## Balance training interface
+
+`physics/environment.py` provides a Gymnasium `BalanceEnv` for future learning algorithms. No trained policy or PPO implementation is included yet. The browser still runs the demonstration controls; baseline rollouts run headlessly and do not appear in that viewer.
+
+- `reset(seed=...)` starts a reproducible world with small randomized body tilt and joint angles. Repeating the same seed repeats the initial state. `perturbation=0` disables pose variation for calibration.
+- `step(action)` applies **12 independent normalized position commands**, never the scripted walking controller. Default decision frequency is 30 Hz (two public physics steps per action).
+- Attempts end on a fall (height <0.45 m or uprightness <0.45), leaving the central 20×20 m area, or reaching the default 20-second limit. Falls/boundaries return `terminated`; time limits return `truncated`. Call reset before stepping again. The rollout runner resets automatically between attempts.
+- The 55-value float32 observation contains body-frame world-up, body-frame linear velocity /3, angular velocity /4, height in metres, 12 joint angles mapped relative to limits, 12 joint velocities /4, four foot contacts, four normal forces /100, 12 previous actions and remaining-time fraction. Exact order is in `BalanceEnv.observation_names`. Values are scaled but not clipped, and the observation space intentionally has unbounded numeric limits.
+- Reward is accumulated per second: `0.75 * uprightness + 0.25 * height_quality - 0.02 * (motor_power / 48) - 0.02 * mean(action_change²)`. Uprightness is floored at zero. Height quality peaks at 0.98 m and reaches zero at a deviation of 0.53 m. Falling subtracts 1. There is **no forward-progress reward** in this initial balance task.
+- Every step reports reward components. Completed episodes report reward, time upright, horizontal/forward displacement, motor work, length, reason and world seed.
+
+Example policy integration:
+
+```python
+from physics.environment import BalanceEnv
+
+env = BalanceEnv()
+try:
+    observation, info = env.reset(seed=1)
+    while True:
+        action = env.action_space.sample()  # replace with your learning policy
+        observation, reward, terminated, truncated, info = env.step(action)
+        if terminated or truncated:
+            print(info['episode'])
+            observation, info = env.reset()
+finally:
+    env.close()
+```
+
+Run baseline experiments on Windows after pulling the update:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m physics.rollout --policy zero --episodes 5 --output runs/zero.jsonl
+.\.venv\Scripts\python.exe -m physics.rollout --policy random --episodes 5 --output runs/random.jsonl
+```
+
+On macOS/Linux substitute `.venv/bin/python`. Outputs are JSON Lines (one summary per episode), excluded from Git. Choose a new output filename for each run: existing logs are never overwritten. These are **baselines, not training**. Zero holds the existing neutral stance and is intentionally an easy calibration reference; later experiments will need disturbances, more difficult starts, forward movement objectives and held-out evaluation seeds. Learning gains must be compared against this baseline, not simply against random flailing.
